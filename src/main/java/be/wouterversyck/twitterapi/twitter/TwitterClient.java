@@ -18,7 +18,7 @@ public class TwitterClient {
         this.webClient = webClient;
     }
 
-    public Flux<Tweet> stream(String ... hashTags) {
+    public Flux<Tweet> stream(String... hashTags) {
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
 
         String tracks = String.join(",", hashTags);

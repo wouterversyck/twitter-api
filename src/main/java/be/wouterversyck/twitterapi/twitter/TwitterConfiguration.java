@@ -27,11 +27,11 @@ public class TwitterConfiguration {
                         next.exchange(ClientRequest.from(currentRequest)
                                 .header(
                                         HttpHeaders.AUTHORIZATION,
-                                            oAuth.oAuth1Header(
-                                                currentRequest.url(),
-                                                currentRequest.method(),
-                                                    ((LinkedMultiValueMap<String, String>)currentRequest.attribute(OAuth.PARAMS).get()).toSingleValueMap()
-                                            )
+                                        oAuth.oAuth1Header(
+                                            currentRequest.url(),
+                                            currentRequest.method(),
+                                            ((LinkedMultiValueMap<String, String>)currentRequest.attribute(OAuth.PARAMS).get()).toSingleValueMap()
+                                        )
                                 ).build())
                 ).build();
     }
