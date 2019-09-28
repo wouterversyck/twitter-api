@@ -13,6 +13,7 @@ import reactor.core.publisher.Flux;
 public class TwitterClient {
 
     private WebClient webClient;
+    static final String TWITTER_PARAMS = "twitter_params";
 
     public TwitterClient(WebClient webClient) {
         this.webClient = webClient;
@@ -28,7 +29,7 @@ public class TwitterClient {
                 .post()
                 .uri(TwitterEndpoints.STREAM)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .attribute(OAuth.PARAMS, body)
+                .attribute(TWITTER_PARAMS, body)
                 .body(BodyInserters.fromFormData(body))
                 .exchange()
                 .flatMapMany(clientResponse -> clientResponse.bodyToFlux(Tweet.class));

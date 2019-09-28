@@ -12,10 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class OAuth {
@@ -31,7 +28,6 @@ public class OAuth {
     private static final String HMAC_SHA1 = "HMAC-SHA1";
     private static final String ONE_DOT_OH = "1.0";
 
-    public static final String PARAMS = "twitter_params";
     private final String consumerKey;
     private final String consumerSecret;
     private final String token;
@@ -50,15 +46,15 @@ public class OAuth {
         this.secureRandom = new SecureRandom();
     }
 
-    public String oAuth1Header(URI requestUri, HttpMethod httpMethod, Map<String, String> bodyParams) {
-        List<Request.Pair> requestParams = new ArrayList(bodyParams.size());
+    String oAuth1Header(URI requestUri, HttpMethod httpMethod, Map<String, String> bodyParams) {
+        List<Request.Pair> requestParams = new ArrayList<>(bodyParams.size());
         for (Map.Entry<String, String> entry : bodyParams.entrySet()) {
             requestParams.add(new Request.Pair(urlEncode(entry.getKey()), urlEncode(entry.getValue())));
         }
 
         long timestampSecs = this.generateTimestamp();
         String nonce = this.generateNonce();
-        OAuthParams.OAuth1Params oAuth1Params = new OAuthParams.OAuth1Params(this.token, this.consumerKey, nonce, Long.valueOf(timestampSecs),
+        OAuthParams.OAuth1Params oAuth1Params = new OAuthParams.OAuth1Params(this.token, this.consumerKey, nonce, timestampSecs,
                 Long.toString(timestampSecs), "", HMAC_SHA1, ONE_DOT_OH);
 
         int port = requestUri.getPort();
@@ -76,13 +72,11 @@ public class OAuth {
         String signature;
         try {
             signature = this.signer.getString(normalized, this.tokenSecret, this.consumerSecret);
-        } catch (InvalidKeyException invalidKeyEx) {
+        } catch (InvalidKeyException | NoSuchAlgorithmException invalidKeyEx) {
             throw new RuntimeException(invalidKeyEx);
-        } catch (NoSuchAlgorithmException noSuchAlgoEx) {
-            throw new RuntimeException(noSuchAlgoEx);
         }
 
-        Map<String, String> oauthHeaders = new HashMap();
+        Map<String, String> oauthHeaders = new HashMap<>();
         oauthHeaders.put(OAUTH_CONSUMER_KEY, this.quoted(this.consumerKey));
         oauthHeaders.put(OAUTH_TOKEN, this.quoted(this.token));
         oauthHeaders.put(OAUTH_SIGNATURE, this.quoted(signature));
@@ -108,7 +102,7 @@ public class OAuth {
         return Long.toString(Math.abs(this.secureRandom.nextLong())) + System.currentTimeMillis();
     }
 
-    public String urlEncode(String source) {
+    private String urlEncode(String source) {
         return UriUtils.encode(source, StandardCharsets.UTF_8);
     }
 

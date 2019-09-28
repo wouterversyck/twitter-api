@@ -8,6 +8,11 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.reactive.function.client.ClientRequest;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Map;
+
+import static be.wouterversyck.twitterapi.twitter.TwitterClient.TWITTER_PARAMS;
+
+
 @Configuration
 public class TwitterConfiguration {
     // Provide data with environment variables
@@ -22,17 +27,25 @@ public class TwitterConfiguration {
 
     @Bean
     public WebClient webClient(OAuth oAuth) {
+
         return WebClient.builder()
-                .filter((currentRequest, next) ->
-                        next.exchange(ClientRequest.from(currentRequest)
-                                .header(
-                                        HttpHeaders.AUTHORIZATION,
-                                        oAuth.oAuth1Header(
+                .filter((currentRequest, next) -> {
+                    if(currentRequest.attribute(TWITTER_PARAMS).isEmpty()) {
+                        throw new IllegalStateException("Body params myst be set to complete Twitter OAuth");
+                    }
+                    Map<String, String> map = attributesToTwitterBodyParams(currentRequest.attribute(TWITTER_PARAMS).get());
+                    return next.exchange(
+                            ClientRequest.from(currentRequest)
+                            .header(
+                                    HttpHeaders.AUTHORIZATION,
+                                    oAuth.oAuth1Header(
                                             currentRequest.url(),
                                             currentRequest.method(),
-                                            ((LinkedMultiValueMap<String, String>)currentRequest.attribute(OAuth.PARAMS).get()).toSingleValueMap()
-                                        )
-                                ).build())
+                                            map
+                                    )
+                            ).build());
+                    }
+
                 ).build();
     }
 
@@ -49,5 +62,10 @@ public class TwitterConfiguration {
     @Bean
     public TwitterClient twitterClient(WebClient webClient) {
         return new TwitterClient(webClient);
+    }
+
+    private Map<String, String> attributesToTwitterBodyParams(Object multiMap) {
+        //noinspection unchecked
+        return ((LinkedMultiValueMap<String, String>)multiMap).toSingleValueMap();
     }
 }
