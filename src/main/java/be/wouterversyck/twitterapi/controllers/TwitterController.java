@@ -16,7 +16,7 @@ public class TwitterController {
         this.twitterClient = twitterClient;
     }
 
-    @GetMapping(value = "tweet", produces = MediaType.APPLICATION_STREAM_JSON_VALUE)
+    @GetMapping(value = "tweet")
     public Flux<Tweet> twitterStream(@RequestParam("track") String... hashTags) {
         return twitterClient.stream(hashTags);
     }
