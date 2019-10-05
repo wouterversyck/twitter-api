@@ -2,7 +2,6 @@ package be.wouterversyck.twitterapi.controllers;
 
 import be.wouterversyck.twitterapi.twitter.TwitterClient;
 import be.wouterversyck.twitterapi.twitter.models.Tweet;
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -18,6 +17,9 @@ public class TwitterController {
 
     @GetMapping(value = "tweet")
     public Flux<Tweet> twitterStream(@RequestParam("track") String... hashTags) {
+        if(hashTags.length == 0) {
+            return Flux.empty();
+        }
         return twitterClient.stream(hashTags);
     }
 }
