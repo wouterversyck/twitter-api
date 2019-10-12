@@ -15,9 +15,11 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static java.lang.String.format;
+
 public class OAuth {
 
-    private static final String OAUTH1_HEADER_AUTHTYPE = "OAuth ";
+    private static final String OAUTH1_HEADER_AUTH_TYPE = "OAuth";
     private static final String OAUTH_TOKEN = "oauth_token";
     private static final String OAUTH_CONSUMER_KEY = "oauth_consumer_key";
     private static final String OAUTH_SIGNATURE = "oauth_signature";
@@ -26,7 +28,7 @@ public class OAuth {
     private static final String OAUTH_SIGNATURE_METHOD = "oauth_signature_method";
     private static final String OAUTH_VERSION = "oauth_version";
     private static final String HMAC_SHA1 = "HMAC-SHA1";
-    private static final String ONE_DOT_OH = "1.0";
+    private static final String OAUTH_VERSION_ONE = "1.0";
 
     private final String consumerKey;
     private final String consumerSecret;
@@ -47,46 +49,81 @@ public class OAuth {
     }
 
     String oAuth1Header(URI requestUri, HttpMethod httpMethod, Map<String, String> bodyParams) {
-        List<Request.Pair> requestParams = new ArrayList<>(bodyParams.size());
-        for (Map.Entry<String, String> entry : bodyParams.entrySet()) {
-            requestParams.add(new Request.Pair(urlEncode(entry.getKey()), urlEncode(entry.getValue())));
-        }
+        long timestampSecs = generateTimestamp();
+        String nonce = generateNonce();
 
-        long timestampSecs = this.generateTimestamp();
-        String nonce = this.generateNonce();
-        OAuthParams.OAuth1Params oAuth1Params = new OAuthParams.OAuth1Params(this.token, this.consumerKey, nonce, timestampSecs,
-                Long.toString(timestampSecs), "", HMAC_SHA1, ONE_DOT_OH);
+        OAuthParams.OAuth1Params oAuth1Params = new OAuthParams.OAuth1Params(
+                token,
+                consumerKey,
+                nonce,
+                timestampSecs,
+                Long.toString(timestampSecs),
+                "",
+                HMAC_SHA1,
+                OAUTH_VERSION_ONE
+        );
 
-        int port = requestUri.getPort();
+        String normalized = normalizer.normalize(
+                requestUri.getScheme(),
+                requestUri.getHost(),
+                getPort(requestUri),
+                httpMethod.name().toUpperCase(),
+                requestUri.getPath(),
+                getRequestParams(bodyParams),
+                oAuth1Params
+        );
 
-        if(port <= 0) {
-            if(!requestUri.getScheme().equalsIgnoreCase("https")) {
-                throw new IllegalStateException("Bad URI scheme: " + requestUri.getScheme());
-            }
-            port = 443;
-        }
+        Map<String, String> oauthHeaders = Map.of(
+                OAUTH_CONSUMER_KEY, quoted(consumerKey),
+                OAUTH_TOKEN, quoted(token),
+                OAUTH_SIGNATURE, quoted(getSignature(normalized)),
+                OAUTH_SIGNATURE_METHOD, quoted(HMAC_SHA1),
+                OAUTH_TIMESTAMP, quoted(Long.toString(timestampSecs)),
+                OAUTH_NONCE, quoted(nonce),
+                OAUTH_VERSION, quoted(OAUTH_VERSION_ONE)
+        );
 
-        String normalized = this.normalizer.normalize(requestUri.getScheme(), requestUri.getHost(), port, httpMethod.name().toUpperCase(),
-                requestUri.getPath(), requestParams, oAuth1Params);
+        return formatHeader(oauthHeaders);
+    }
 
-        String signature;
+    private List<Request.Pair> getRequestParams(Map<String, String> bodyParams) {
+        return bodyParams.entrySet().stream()
+                .map(entry -> new Request.Pair(
+                        urlEncode(entry.getKey()),
+                        urlEncode(entry.getValue()))
+                )
+                .collect(Collectors.toList());
+    }
+
+    private String getSignature(String normalized) {
         try {
-            signature = this.signer.getString(normalized, this.tokenSecret, this.consumerSecret);
+            return signer.getString(normalized, tokenSecret, consumerSecret);
         } catch (InvalidKeyException | NoSuchAlgorithmException invalidKeyEx) {
             throw new RuntimeException(invalidKeyEx);
         }
+    }
 
-        Map<String, String> oauthHeaders = new HashMap<>();
-        oauthHeaders.put(OAUTH_CONSUMER_KEY, this.quoted(this.consumerKey));
-        oauthHeaders.put(OAUTH_TOKEN, this.quoted(this.token));
-        oauthHeaders.put(OAUTH_SIGNATURE, this.quoted(signature));
-        oauthHeaders.put(OAUTH_SIGNATURE_METHOD, this.quoted(HMAC_SHA1));
-        oauthHeaders.put(OAUTH_TIMESTAMP, this.quoted(Long.toString(timestampSecs)));
-        oauthHeaders.put(OAUTH_NONCE, this.quoted(nonce));
-        oauthHeaders.put(OAUTH_VERSION, this.quoted(ONE_DOT_OH));
+    private String formatHeader(Map<String, String> oauthHeaders) {
+        return format("%s %s",
+                OAUTH1_HEADER_AUTH_TYPE,
+                oauthHeaders.entrySet().stream()
+                        .map(Map.Entry::toString)
+                        .collect(Collectors.joining(", "))
+        );
+    }
 
-        return OAUTH1_HEADER_AUTHTYPE
-                + oauthHeaders.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(", "));
+    private int getPort(URI requestUri) {
+        int port = requestUri.getPort();
+        if(port > 0) {
+            // port already set
+            return port;
+        }
+
+        if(!requestUri.getScheme().equalsIgnoreCase("https")) {
+            throw new IllegalStateException("Bad URI scheme: " + requestUri.getScheme());
+        }
+
+        return 443;
     }
 
     private String quoted(String str) {
@@ -99,7 +136,7 @@ public class OAuth {
     }
 
     private String generateNonce() {
-        return Long.toString(Math.abs(this.secureRandom.nextLong())) + System.currentTimeMillis();
+        return Long.toString(Math.abs(secureRandom.nextLong())) + System.currentTimeMillis();
     }
 
     private String urlEncode(String source) {

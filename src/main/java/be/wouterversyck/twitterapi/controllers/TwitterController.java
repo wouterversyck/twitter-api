@@ -19,18 +19,22 @@ public class TwitterController {
     @GetMapping(value = "tweet")
     public Flux<ServerSentEvent<Tweet>> twitterStream(@RequestParam("track") String... hashTags) {
 
-        return Flux.from(
-                twitterClient.stream(hashTags)
-                        .map(e -> ServerSentEvent.<Tweet>builder()
-                                .data(e)
-                                .id(e.getId())
-                                .build()
-                        )
-        ).onErrorReturn(
-                ServerSentEvent.<Tweet>builder()
-                    .event("onerror")
-                    .data(null)
-                    .build()
-        );
+        return twitterClient.stream(hashTags)
+                .map(this::eventFromTweet)
+                .onErrorReturn(onError());
+    }
+
+    private ServerSentEvent<Tweet> eventFromTweet(Tweet tweet) {
+        return ServerSentEvent.<Tweet>builder()
+                .data(tweet)
+                .id(tweet.getId())
+                .build();
+    }
+
+    private ServerSentEvent<Tweet> onError() {
+        return ServerSentEvent.<Tweet>builder()
+                .event("onerror")
+                .data(null)
+                .build();
     }
 }

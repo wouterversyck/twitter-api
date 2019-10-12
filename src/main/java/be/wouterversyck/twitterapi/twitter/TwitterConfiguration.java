@@ -6,7 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.web.reactive.function.client.ClientRequest;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.web.reactive.function.client.ExchangeFunction;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
@@ -26,30 +29,6 @@ public class TwitterConfiguration {
     private String tokenSecret;
 
     @Bean
-    public WebClient webClient(OAuth oAuth) {
-
-        return WebClient.builder()
-                .filter((currentRequest, next) -> {
-                    if(currentRequest.attribute(TWITTER_PARAMS).isEmpty()) {
-                        throw new IllegalStateException("Body params myst be set to complete Twitter OAuth");
-                    }
-                    Map<String, String> map = attributesToTwitterBodyParams(currentRequest.attribute(TWITTER_PARAMS).get());
-                    return next.exchange(
-                            ClientRequest.from(currentRequest)
-                            .header(
-                                    HttpHeaders.AUTHORIZATION,
-                                    oAuth.oAuth1Header(
-                                            currentRequest.url(),
-                                            currentRequest.method(),
-                                            map
-                                    )
-                            ).build());
-                    }
-
-                ).build();
-    }
-
-    @Bean
     public OAuth twitterOauth() {
         return new OAuth(
                 consumerKey,
@@ -62,6 +41,36 @@ public class TwitterConfiguration {
     @Bean
     public TwitterClient twitterClient(WebClient webClient) {
         return new TwitterClient(webClient);
+    }
+
+    @Bean
+    public WebClient webClient(OAuth oAuth) {
+        return WebClient.builder()
+                .filter(
+                        (currentRequest, next) -> addOauthHeader(currentRequest, next, oAuth)
+                )
+                .build();
+    }
+
+    private Mono<ClientResponse> addOauthHeader(ClientRequest currentRequest, ExchangeFunction next, OAuth oAuth) {
+        if(currentRequest.attribute(TWITTER_PARAMS).isEmpty()) {
+            throw new IllegalStateException("Request attributes must be set to complete Twitter OAuth");
+        }
+        Object requestAttribute = currentRequest.attribute(TWITTER_PARAMS).get();
+        Map<String, String> twitterBodyParams = attributesToTwitterBodyParams(requestAttribute);
+        return next.exchange(getClientRequest(currentRequest, oAuth, twitterBodyParams));
+    }
+
+    private ClientRequest getClientRequest(ClientRequest currentRequest, OAuth oAuth, Map<String, String> twitterBodyParams) {
+        return ClientRequest.from(currentRequest)
+                .header(
+                        HttpHeaders.AUTHORIZATION,
+                        oAuth.oAuth1Header(
+                                currentRequest.url(),
+                                currentRequest.method(),
+                                twitterBodyParams
+                        )
+                ).build();
     }
 
     private Map<String, String> attributesToTwitterBodyParams(Object multiMap) {
